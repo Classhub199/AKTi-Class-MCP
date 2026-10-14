@@ -146,8 +146,30 @@ class RAHM_SEO {
 	}
 
 	public static function head() {
-		if ( ! self::builtin_active() || ! is_singular() ) { return; }
-		$id    = get_queried_object_id();
+		if ( ! is_singular() ) { return; }
+		$id = get_queried_object_id();
+		if ( self::builtin_active() ) { self::builtin_head( $id ); }
+		// Structured data written with the seo tool (schema / faq actions). Works with or without an SEO plugin.
+		$graph = array();
+		$sch   = get_post_meta( $id, '_rahm_schema', true );
+		if ( $sch ) {
+			$d = json_decode( $sch, true );
+			if ( is_array( $d ) ) { $graph = isset( $d['@graph'] ) ? $d['@graph'] : array( $d ); }
+		}
+		$faq = get_post_meta( $id, '_rahm_faq', true );
+		if ( $faq ) {
+			$items = json_decode( $faq, true );
+			if ( is_array( $items ) && $items ) {
+				$graph[] = self::faq_schema( $items );
+				echo '<style id="rahm-faq-css">.rahm-faq{max-width:820px;margin:48px auto;padding:0 16px}.rahm-faq h2{margin:0 0 16px}.rahm-faq details{border:1px solid #d9dee8;border-radius:10px;padding:0;margin:0 0 10px;background:#fff}.rahm-faq summary{cursor:pointer;padding:14px 16px;font-weight:700;list-style-position:inside}.rahm-faq summary:focus-visible{outline:3px solid #b08d57;outline-offset:2px}.rahm-faq details[open] summary{border-bottom:1px solid #e6eaf2}.rahm-faq .rahm-a{padding:12px 16px 16px;line-height:1.65}</style>' . "\n";
+			}
+		}
+		if ( $graph ) {
+			echo '<script type="application/ld+json">' . wp_json_encode( array( '@context' => 'https://schema.org', '@graph' => array_values( $graph ) ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP ) . "</script>\n";
+		}
+	}
+
+	private static function builtin_head( $id ) {
 		$desc  = (string) get_post_meta( $id, '_rahm_seo_desc', true );
 		$title = (string) get_post_meta( $id, '_rahm_seo_title', true );
 		$canon = (string) get_post_meta( $id, '_rahm_seo_canonical', true );
@@ -163,5 +185,24 @@ class RAHM_SEO {
 		echo '<meta property="og:url" content="' . esc_url( get_permalink( $id ) ) . "\">\n";
 		if ( $og ) { echo '<meta property="og:image" content="' . esc_url( $og ) . "\">\n"; }
 		echo '<meta name="twitter:card" content="' . ( $og ? 'summary_large_image' : 'summary' ) . "\">\n";
+	}
+
+	/* ---------- FAQ and schema helpers ---------- */
+
+	public static function faq_schema( array $items ) {
+		$q = array();
+		foreach ( $items as $i ) {
+			$q[] = array( '@type' => 'Question', 'name' => wp_strip_all_tags( $i['q'] ), 'acceptedAnswer' => array( '@type' => 'Answer', 'text' => wp_kses( $i['a'], array( 'a' => array( 'href' => true ), 'p' => array(), 'strong' => array(), 'em' => array(), 'ul' => array(), 'ol' => array(), 'li' => array(), 'br' => array() ) ) ) );
+		}
+		return array( '@type' => 'FAQPage', 'mainEntity' => $q );
+	}
+
+	/** Accessible FAQ block with no JavaScript (details/summary). */
+	public static function faq_html( array $items, $heading ) {
+		$h = '<section class="rahm-faq" aria-labelledby="rahm-faq-title"><h2 id="rahm-faq-title">' . esc_html( $heading ) . '</h2>';
+		foreach ( $items as $i ) {
+			$h .= '<details><summary>' . esc_html( wp_strip_all_tags( $i['q'] ) ) . '</summary><div class="rahm-a">' . wp_kses_post( $i['a'] ) . '</div></details>';
+		}
+		return $h . '</section>';
 	}
 }

@@ -56,6 +56,10 @@ class RAHM_Ctx {
 		if ( $level === 'draft' || self::$source === 'studio' ) {
 			return;
 		}
+		// The owner can switch "ask me first" off in Settings: then changes are pushed straight to the site (still backed up).
+		if ( ! RAHM_Store::settings()['ask'] ) {
+			return;
+		}
 		if ( ! self::$confirmed ) {
 			throw new Exception( 'CONFIRMATION REQUIRED: this will ' . $summary . '. Tell the owner exactly what you will do and ask "Do you want this?". After a clear yes, call again with confirm=true and it goes live right away.' );
 		}

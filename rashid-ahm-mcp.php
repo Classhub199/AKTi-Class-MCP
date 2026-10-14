@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Rashid Ahm MCP
- * Description: A complete AI agency team for WordPress. Connect Claude, ChatGPT or any MCP app with role keys (supervisor, designer, SEO, copywriter and more), watch every change live in the Live Studio, edit directly, say yes in the chat and it goes live, and undo for 30 days.
- * Version: 2.1.0
+ * Description: A complete AI agency team for WordPress. Connect Claude, ChatGPT or any MCP app with role keys (supervisor, designer, SEO, copywriter and more), say yes in the chat and the change goes live on your site, check expert scores, and undo for 30 days.
+ * Version: 2.3.0
  * Author: Rashid Ahmad
  * Requires at least: 5.8
  * Requires PHP: 7.4
@@ -15,13 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'RAHM_VERSION', '2.1.0' );
+define( 'RAHM_VERSION', '2.3.0' );
 define( 'RAHM_FILE', __FILE__ );
 define( 'RAHM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RAHM_URL', plugin_dir_url( __FILE__ ) );
 define( 'RAHM_CONTACT', 'rashid.ahm199@outlook.com' );
 
-foreach ( array( 'store', 'i18n', 'auth', 'ctx', 'skills', 'seo', 'direct', 'tools', 'tools-team', 'audit', 'server', 'studio', 'admin' ) as $rahm_file ) {
+foreach ( array( 'store', 'i18n', 'auth', 'ctx', 'skills', 'seo', 'direct', 'tools', 'tools-team', 'audit', 'server', 'admin' ) as $rahm_file ) {
 	require_once RAHM_DIR . 'includes/class-rahm-' . $rahm_file . '.php';
 }
 unset( $rahm_file );
@@ -32,7 +32,6 @@ register_deactivation_hook( __FILE__, array( 'RAHM_Store', 'deactivate' ) );
 RAHM_Store::init();
 RAHM_SEO::init();
 RAHM_Server::init();
-RAHM_Studio::init();
 RAHM_Admin::init();
 
 /* Maintenance page: visitors see a short notice, admins and the MCP keep working. */

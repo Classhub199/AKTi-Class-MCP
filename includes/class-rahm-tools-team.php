@@ -26,9 +26,9 @@ class RAHM_Tools_Team {
 		$ap = array( 'action' => 'string', 'p' => 'object|action parameters', 'confirm' => 'boolean|true only after the owner said yes' );
 
 		/* ---------- SEO ---------- */
-		$d( 'seo', 'All on-site SEO. Actions: get{id} | set{id,title,description,focus_keyword,canonical,og_image,noindex} or {items:[...]} | audit{ids|id|all,limit,page} | head{id|url} (what visitors see in <head>) | links{id} | linkmap{} (internal links, orphan pages) | terms{taxonomy,op:list|create|rename|delete,...} | permalinks{structure?}.', $ap, function ( $a ) {
+		$d( 'seo', 'All on-site SEO. Actions: get{id} | set{id,title,description,focus_keyword,canonical,og_image,noindex} or {items:[...]} | audit{ids|id|all,limit,page} | head{id|url} (what visitors see in <head>) | links{id} | linkmap{} (internal links, orphan pages) | terms{taxonomy,op:list|create|rename|delete,...} | permalinks{structure?} | faq{id,items:[{q,a}],heading} adds an FAQ block + FAQPage schema (3-12 questions) | schema{id,json} sets JSON-LD structured data (Organization, LocalBusiness, Article, Product, ...) or reads it.', $ap, function ( $a ) {
 			$p = self::pp( $a );
-			switch ( self::act( $a, array( 'get', 'set', 'audit', 'head', 'links', 'linkmap', 'terms', 'permalinks' ) ) ) {
+			switch ( self::act( $a, array( 'get', 'set', 'audit', 'head', 'links', 'linkmap', 'terms', 'permalinks', 'faq', 'schema' ) ) ) {
 				case 'get':
 					return RAHM_SEO::read( (int) $p['id'] );
 				case 'set':
@@ -72,6 +72,10 @@ class RAHM_Tools_Team {
 					return RAHM_Audit::link_map();
 				case 'terms':
 					return self::terms( $p );
+				case 'faq':
+					return self::faq( $p );
+				case 'schema':
+					return self::schema( $p );
 				case 'permalinks':
 					if ( ! isset( $p['structure'] ) ) { return array( 'structure' => get_option( 'permalink_structure' ), 'category_base' => get_option( 'category_base' ), 'tag_base' => get_option( 'tag_base' ) ); }
 					RAHM_Ctx::gate( 'danger', 'change the permalink structure to ' . $p['structure'] . ' (every page address may change; add redirects if the site is already indexed)' );
@@ -147,7 +151,7 @@ class RAHM_Tools_Team {
 		} );
 
 		/* ---------- Audit scores ---------- */
-		$d( 'audit', 'Expert score out of 100 from real measurements. Actions: run{role:seo|copywriter|designer|performance|marketing|qa,limit} | get (latest scores of all roles). Add your own written opinion with inbox post type=report and a score.', $ap, function ( $a ) {
+		$d( 'audit', 'Expert score out of 100 from real measurements. Actions: run{role:seo|aeo|copywriter|designer|performance|marketing|qa,limit} | get (latest scores of all roles). Add your own written opinion with inbox post type=report and a score.', $ap, function ( $a ) {
 			$p = self::pp( $a );
 			switch ( self::act( $a, array( 'run', 'get' ) ) ) {
 				case 'run':
@@ -194,6 +198,72 @@ class RAHM_Tools_Team {
 		if ( ! isset( $el['settings'] ) || ! is_array( $el['settings'] ) ) { $el['settings'] = array(); }
 		$el['elements'] = isset( $el['elements'] ) && is_array( $el['elements'] ) ? array_map( array( __CLASS__, 'prepare_element' ), $el['elements'] ) : array();
 		return $el;
+	}
+
+	/** Add (or replace) an FAQ block on a page, plus FAQPage structured data. */
+	private static function faq( array $p ) {
+		$id   = (int) ( isset( $p['id'] ) ? $p['id'] : 0 );
+		$post = get_post( $id );
+		if ( ! $post ) { throw new Exception( 'Page not found.' ); }
+		$items = array();
+		foreach ( (array) ( isset( $p['items'] ) ? $p['items'] : array() ) as $x ) {
+			$q = isset( $x['q'] ) ? trim( wp_strip_all_tags( $x['q'] ) ) : '';
+			$a = isset( $x['a'] ) ? trim( wp_kses_post( $x['a'] ) ) : '';
+			if ( $q !== '' && $a !== '' ) { $items[] = array( 'q' => $q, 'a' => $a ); }
+		}
+		if ( count( $items ) < 3 || count( $items ) > 12 ) { throw new Exception( 'Give 3 to 12 question and answer pairs, each with real, specific answers (no filler).' ); }
+		RAHM_Ctx::gate( self::level_for( $id ), 'add an FAQ with ' . count( $items ) . ' questions to "' . get_the_title( $id ) . '"' );
+		$heading = isset( $p['heading'] ) ? sanitize_text_field( $p['heading'] ) : 'Frequently asked questions';
+		$html    = RAHM_SEO::faq_html( $items, $heading );
+		$undo    = RAHM_Store::snap_post( $id, array( '_rahm_faq' ), 'FAQ' );
+		update_post_meta( $id, '_rahm_faq', wp_slash( wp_json_encode( $items, JSON_UNESCAPED_UNICODE ) ) );
+		$out = array( 'id' => $id, 'questions' => count( $items ), 'undo_id' => $undo );
+		if ( RAHM_Direct::is_elementor( $id ) ) {
+			$out['placed'] = 'schema only';
+			$out['html']   = $html;
+			$out['next']   = 'This is an Elementor page: add the html above with the elementor tool (an HTML widget at the end of the page). The FAQPage structured data is already saved.';
+		} else {
+			$c   = $post->post_content;
+			$pat = '#<section class="rahm-faq".*?</section>#s';
+			if ( preg_match( $pat, $c ) ) {
+				$c = preg_replace_callback( $pat, function () use ( $html ) { return $html; }, $c, 1 );
+			} else {
+				$c .= "\n\n" . ( has_blocks( $c ) ? "<!-- wp:html -->\n" . $html . "\n<!-- /wp:html -->" : $html );
+			}
+			wp_update_post( wp_slash( array( 'ID' => $id, 'post_content' => $c ) ) );
+			$out['placed'] = 'end of the page content';
+		}
+		RAHM_Ctx::done( 'seo', 'Added an FAQ (' . count( $items ) . ' questions) to "' . get_the_title( $id ) . '"', $id, $undo );
+		return $out;
+	}
+
+	/** Read or set JSON-LD structured data for one page. */
+	private static function schema( array $p ) {
+		$id = (int) ( isset( $p['id'] ) ? $p['id'] : 0 );
+		if ( ! get_post( $id ) ) { throw new Exception( 'Page not found.' ); }
+		if ( ! array_key_exists( 'json', $p ) ) {
+			return array( 'schema' => json_decode( (string) get_post_meta( $id, '_rahm_schema', true ), true ), 'faq_questions' => count( (array) json_decode( (string) get_post_meta( $id, '_rahm_faq', true ), true ) ) );
+		}
+		$d = is_string( $p['json'] ) ? json_decode( $p['json'], true ) : $p['json'];
+		if ( $d === array() || $d === '' || $d === null ) {
+			RAHM_Ctx::gate( self::level_for( $id ), 'remove the structured data of "' . get_the_title( $id ) . '"' );
+			$undo = RAHM_Store::snap_post( $id, array( '_rahm_schema' ), 'Schema removed' );
+			delete_post_meta( $id, '_rahm_schema' );
+			RAHM_Ctx::done( 'seo', 'Removed structured data from "' . get_the_title( $id ) . '"', $id, $undo );
+			return array( 'removed' => true, 'undo_id' => $undo );
+		}
+		if ( ! is_array( $d ) ) { throw new Exception( 'json must be a schema.org object (with @type) or a list of them.' ); }
+		$nodes = isset( $d['@graph'] ) ? $d['@graph'] : ( isset( $d['@type'] ) ? array( $d ) : $d );
+		foreach ( $nodes as $n ) {
+			if ( ! is_array( $n ) || empty( $n['@type'] ) ) { throw new Exception( 'Every schema item needs an @type, for example Organization, LocalBusiness, Article, Product or WebSite.' ); }
+		}
+		$enc = wp_json_encode( array( '@graph' => array_values( $nodes ) ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		if ( strlen( $enc ) > 20000 ) { throw new Exception( 'Structured data is too large (20 KB max).' ); }
+		RAHM_Ctx::gate( self::level_for( $id ), 'set structured data (' . implode( ', ', array_map( function ( $n ) { return is_array( $n['@type'] ) ? implode( '/', $n['@type'] ) : $n['@type']; }, $nodes ) ) . ') on "' . get_the_title( $id ) . '"' );
+		$undo = RAHM_Store::snap_post( $id, array( '_rahm_schema' ), 'Schema' );
+		update_post_meta( $id, '_rahm_schema', wp_slash( $enc ) );
+		RAHM_Ctx::done( 'seo', 'Set structured data on "' . get_the_title( $id ) . '"', $id, $undo );
+		return array( 'id' => $id, 'types' => array_map( function ( $n ) { return $n['@type']; }, $nodes ), 'undo_id' => $undo, 'tip' => 'Do not repeat a type your SEO plugin already prints (two Organization blocks conflict).' );
 	}
 
 	private static function terms( array $p ) {

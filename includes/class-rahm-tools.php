@@ -144,7 +144,7 @@ class RAHM_Tools {
 			);
 		} );
 
-		$d( 'skill', 'Load team playbooks. No names = the playbooks for your role. Names: workflow, supervisor, designer, elementor, developer, copywriter, seo, marketing, ecommerce, translator, qa, security, performance, strategist.', array( 'names' => 'array|e.g. ["designer","seo"]' ), function ( $a ) {
+		$d( 'skill', 'Load team playbooks. No names = the playbooks for your role. Names: professional_site, workflow, supervisor, designer, design_system, color_palette, mobile_first, site_structure, banner, image_prompts, elementor, developer, wordpress, security, performance, copywriter, seo, keyword_research, aeo_geo, marketing, social_marketing, audiences, ecommerce, translator, qa, strategist.', array( 'names' => 'array|e.g. ["designer","seo"]' ), function ( $a ) {
 			$all   = RAHM_Skills::all();
 			$names = isset( $a['names'] ) && $a['names'] ? (array) $a['names'] : RAHM_Skills::for_role( RAHM_Ctx::role() );
 			$o     = array();
@@ -384,7 +384,11 @@ class RAHM_Tools {
 				if ( $m === 'GET' || $m === 'DELETE' ) { $req->set_query_params( $pr ); } else { $req->set_body_params( $pr ); }
 				$res  = rest_do_request( $req );
 				$data = rest_get_server()->response_to_data( $res, false );
-				if ( $res->is_error() || $res->get_status() >= 400 ) { throw new Exception( $route . ': ' . self::enc( $data ) ); }
+				if ( $res->is_error() || $res->get_status() >= 400 ) {
+					$st   = (int) $res->get_status();
+					$hint = in_array( $st, array( 401, 403 ), true ) ? ' Hint: this route is not allowed for the site administrator account, or a security plugin blocks it.' : ( $st === 404 ? ' Hint: check the route spelling and that the plugin that owns it is active.' : '' );
+					throw new Exception( $route . ' answered ' . $st . ': ' . mb_substr( self::enc( $data ), 0, 600 ) . $hint );
+				}
 				if ( $m !== 'GET' ) { RAHM_Ctx::done( 'rest', "$m $route" ); }
 				$out[] = $data;
 			}

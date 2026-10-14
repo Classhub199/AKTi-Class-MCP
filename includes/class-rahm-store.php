@@ -41,6 +41,7 @@ class RAHM_Store {
 	public static function defaults() {
 		return array(
 			'lang'             => 'en',
+			'ask'              => 1,
 			'readonly'         => 0,
 			'files'            => 1,
 			'php'              => 1,

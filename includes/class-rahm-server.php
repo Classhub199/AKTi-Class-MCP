@@ -17,6 +17,23 @@ class RAHM_Server {
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 		add_filter( 'rest_pre_serve_request', array( __CLASS__, 'cors' ), 10, 4 );
+		// Some security plugins ("disable REST API for visitors") answer 401/403 before our own key check runs.
+		// Our routes check their own key, so let them through. Nothing else is touched.
+		add_filter( 'rest_authentication_errors', array( __CLASS__, 'let_our_routes_through' ), 99999 );
+	}
+
+	public static function let_our_routes_through( $result ) {
+		if ( ! is_wp_error( $result ) ) {
+			return $result;
+		}
+		$route = isset( $GLOBALS['wp']->query_vars['rest_route'] ) ? (string) $GLOBALS['wp']->query_vars['rest_route'] : '';
+		if ( $route === '' && isset( $_SERVER['REQUEST_URI'] ) ) {
+			$route = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ); // phpcs:ignore
+		}
+		if ( strpos( $route, 'rahm/v1/mcp' ) !== false || strpos( $route, 'rahm/v1/health' ) !== false ) {
+			return true;
+		}
+		return $result;
 	}
 
 	public static function routes() {
@@ -27,10 +44,18 @@ class RAHM_Server {
 		);
 		register_rest_route( 'rahm/v1', '/mcp/(?P<token>rahm_[A-Za-z0-9]+)', $args );
 		register_rest_route( 'rahm/v1', '/mcp', $args );
+		// Public, harmless check used by the Connect AI page to see whether this site's REST address is reachable.
+		register_rest_route( 'rahm/v1', '/health', array(
+			'methods'             => 'GET',
+			'permission_callback' => '__return_true',
+			'callback'            => function () {
+				return array( 'ok' => true, 'name' => 'Rashid Ahm MCP', 'version' => RAHM_VERSION );
+			},
+		) );
 	}
 
 	public static function cors( $served, $result, $request, $server ) {
-		if ( strpos( $request->get_route(), '/rahm/v1/mcp' ) !== 0 ) {
+		if ( strpos( $request->get_route(), '/rahm/v1/mcp' ) !== 0 && strpos( $request->get_route(), '/rahm/v1/health' ) !== 0 ) {
 			return $served;
 		}
 		header( 'Access-Control-Allow-Origin: *' );

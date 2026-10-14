@@ -14,7 +14,7 @@ class RAHM_Audit {
 	}
 
 	private static function fetch( $url, $mobile = false ) {
-		$ua = $mobile ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 RahmMCP-QA' : 'Mozilla/5.0 RahmMCP-QA';
+		$ua = $mobile ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 RahmMCP' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 RahmMCP';
 		return wp_remote_get( $url, array( 'timeout' => 15, 'redirection' => 3, 'user-agent' => $ua, 'headers' => array( 'Cache-Control' => 'no-cache' ) ) );
 	}
 
@@ -57,9 +57,16 @@ class RAHM_Audit {
 		$lazy = preg_match_all( '/<img\b[^>]*loading=["\']lazy["\']/i', $b );
 		if ( $imgs > 4 && $lazy < $imgs - 3 ) { $i[] = array( 5, 'Images below the fold are not lazy-loaded' ); }
 		$nodim = preg_match_all( '/<img\b(?![^>]*\bwidth=)[^>]*>/i', $b );
+		$types = array();
+		if ( preg_match_all( '/<script[^>]+application\/ld\+json[^>]*>(.*?)<\/script>/is', $b, $js ) ) {
+			foreach ( $js[1] as $j ) { if ( preg_match_all( '/"@type"\s*:\s*"([A-Za-z]+)"/', $j, $tm ) ) { $types = array_merge( $types, $tm[1] ); } }
+		}
+		$qh    = preg_match_all( '/<h[23][^>]*>\s*(?:[^<]*\?|(?:what|how|why|when|where|who|which|can|is|are|do|does|should)\b[^<]*)<\/h[23]>/iu', $b );
+		$body  = wp_strip_all_tags( preg_replace( '/<(script|style|nav|header|footer)\b.*?<\/\1>/is', ' ', $b ) );
+		$words = str_word_count( $body );
 		$res   = array(
 			'url' => $url, 'status' => $code, 'ms' => $ms, 'kb' => $kb, 'issues' => $i,
-			'm'   => array( 'scripts' => $scripts, 'styles' => $styles, 'imgs' => $imgs, 'lazy' => $lazy, 'img_no_size' => $nodim, 'og' => (bool) preg_match( '/property=["\']og:title/i', $b ), 'canonical' => (bool) preg_match( '/rel=["\']canonical/i', $b ), 'tel' => (bool) preg_match( '/href=["\'](tel:|https?:\/\/wa\.me|https?:\/\/api\.whatsapp)/i', $b ), 'mail' => (bool) preg_match( '/href=["\']mailto:/i', $b ), 'form' => (bool) preg_match( '/<form\b/i', $b ), 'cta' => (bool) preg_match( '/<(a|button)\b[^>]*>[^<]{0,40}(contact|call|buy|book|order|get started|start|apply|enrol|enroll|register|shop|subscribe|quote|learn more|اب|رابطہ|ابھی)[^<]{0,30}<\/(a|button)>/iu', $b ) || (bool) preg_match( '/class=["\'][^"\']*(btn|button|elementor-button)/i', $b ) ),
+			'm'   => array( 'scripts' => $scripts, 'styles' => $styles, 'imgs' => $imgs, 'lazy' => $lazy, 'img_no_size' => $nodim, 'og' => (bool) preg_match( '/property=["\']og:title/i', $b ), 'canonical' => (bool) preg_match( '/rel=["\']canonical/i', $b ), 'tel' => (bool) preg_match( '/href=["\'](tel:|https?:\/\/wa\.me|https?:\/\/api\.whatsapp)/i', $b ), 'mail' => (bool) preg_match( '/href=["\']mailto:/i', $b ), 'form' => (bool) preg_match( '/<form\b/i', $b ), 'schema' => array_values( array_unique( $types ) ), 'faq' => (bool) ( preg_match( '/<details\b|class=["\'][^"\']*faq|frequently asked/i', $b ) || in_array( 'FAQPage', $types, true ) ), 'qheads' => $qh, 'lists' => preg_match_all( '/<(ul|ol)\b/i', $b ), 'tables' => preg_match_all( '/<table\b/i', $b ), 'words' => $words, 'cta' => (bool) preg_match( '/<(a|button)\b[^>]*>[^<]{0,40}(contact|call|buy|book|order|get started|start|apply|enrol|enroll|register|shop|subscribe|quote|learn more|اب|رابطہ|ابھی)[^<]{0,30}<\/(a|button)>/iu', $b ) || (bool) preg_match( '/class=["\'][^"\']*(btn|button|elementor-button)/i', $b ) ),
 		);
 		if ( $keep_html ) { $res['html'] = $b; }
 		return $res;
@@ -126,10 +133,10 @@ class RAHM_Audit {
 				$abs = strpos( $h, 'http' ) === 0 ? $h : home_url( '/' . ltrim( $h, '/' ) );
 				if ( isset( $seen[ $abs ] ) ) { continue; }
 				if ( count( $seen ) >= $limit ) { break 2; }
-				$r  = wp_remote_head( $abs, array( 'timeout' => 6, 'redirection' => 3, 'user-agent' => 'RahmMCP-LinkCheck' ) );
+				$r  = wp_remote_head( $abs, array( 'timeout' => 6, 'redirection' => 3, 'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 RahmMCP' ) );
 				$st = is_wp_error( $r ) ? 0 : (int) wp_remote_retrieve_response_code( $r );
 				if ( in_array( $st, array( 403, 405, 501 ), true ) ) {
-					$r  = wp_remote_get( $abs, array( 'timeout' => 6, 'redirection' => 3, 'user-agent' => 'RahmMCP-LinkCheck' ) );
+					$r  = wp_remote_get( $abs, array( 'timeout' => 6, 'redirection' => 3, 'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 RahmMCP' ) );
 					$st = is_wp_error( $r ) ? 0 : (int) wp_remote_retrieve_response_code( $r );
 				}
 				$seen[ $abs ] = $st;
@@ -142,7 +149,7 @@ class RAHM_Audit {
 	/* ================= Expert scores ================= */
 
 	public static function run( $role, $limit = 6 ) {
-		$role = in_array( $role, array( 'seo', 'copywriter', 'designer', 'performance', 'marketing', 'qa' ), true ) ? $role : 'qa';
+		$role = in_array( $role, array( 'seo', 'aeo', 'copywriter', 'designer', 'performance', 'marketing', 'qa' ), true ) ? $role : 'qa';
 		$limit = max( 1, min( 10, $limit ) );
 		$ids   = array();
 		$front = (int) get_option( 'page_on_front' );
@@ -162,9 +169,22 @@ class RAHM_Audit {
 			foreach ( $issues as $x ) { $count[ $x[1] ] = ( isset( $count[ $x[1] ] ) ? $count[ $x[1] ] : 0 ) + 1; }
 			$pages[] = array( 'url' => $u, 'score' => $s, 'ms' => $a['ms'], 'issues' => $issues ? array_column( $issues, 1 ) : array( 'OK' ) );
 		}
-		$avg = $pages ? (int) round( array_sum( array_column( $pages, 'score' ) ) / count( $pages ) ) : 0;
+		$failed = 0;
+		$why    = '';
+		foreach ( $pages as $pg ) {
+			if ( ! isset( $pg['ms'] ) ) { $failed++; $why = $why ? $why : implode( ' ', (array) $pg['issues'] ); }
+		}
+		if ( $pages && $failed === count( $pages ) ) {
+			throw new Exception( 'Could not open your pages from the server (' . $why . '). A security rule, firewall or hosting setting may block the site from calling itself. Nothing was scored.' );
+		}
+		$avg  = $pages ? (int) round( array_sum( array_column( $pages, 'score' ) ) / count( $pages ) ) : 0;
+		$site = in_array( $role, array( 'seo', 'aeo' ), true ) ? self::site_issues( $role ) : array();
+		if ( $site ) {
+			$avg = max( 0, $avg - min( 25, array_sum( array_column( $site, 0 ) ) ) );
+			foreach ( $site as $x ) { $count = array( $x[1] => 99 ) + $count; }
+		}
 		arsort( $count );
-		return array( 'role' => $role, 'score' => $avg, 'pages' => $pages, 'top_fixes' => array_slice( array_keys( $count ), 0, 6 ), 'basis' => 'Measured on ' . count( $pages ) . ' page(s) of this site. A senior human review can add more.' );
+		return array( 'role' => $role, 'score' => $avg, 'pages' => $pages, 'site_wide' => array_column( $site, 1 ), 'top_fixes' => array_slice( array_keys( $count ), 0, 6 ), 'basis' => 'Measured on ' . count( $pages ) . ' page(s) of this site. A senior human review can add more.' );
 	}
 
 	private static function issues_for( $role, array $a, $post_id ) {
@@ -193,6 +213,17 @@ class RAHM_Audit {
 				$txt  = $post ? wp_strip_all_tags( $post->post_content ) : wp_strip_all_tags( preg_replace( '/<(script|style)\b.*?<\/\1>/is', '', $a['html'] ) );
 				$i    = self::copy_issues( $txt, $a['html'] );
 				break;
+			case 'aeo':
+				$home = untrailingslashit( $a['url'] ) === untrailingslashit( home_url() );
+				if ( ! $m['schema'] ) { $i[] = array( 15, 'No structured data (JSON-LD) on the page' ); }
+				if ( $home && ! array_intersect( $m['schema'], array( 'Organization', 'LocalBusiness', 'WebSite', 'Corporation', 'ProfessionalService' ) ) ) { $i[] = array( 8, 'Home page has no Organization/WebSite schema (who you are)' ); }
+				if ( ! $m['faq'] ) { $i[] = array( 10, 'No FAQ section (add real questions with short direct answers)' ); }
+				if ( $m['qheads'] < 2 && $m['words'] > 250 ) { $i[] = array( 8, 'Fewer than 2 question-style headings (use "How..." and "What..." H2/H3)' ); }
+				if ( $m['lists'] + $m['tables'] < 1 && $m['words'] > 300 ) { $i[] = array( 5, 'No lists or tables (answer engines prefer scannable facts)' ); }
+				if ( $m['words'] < 200 ) { $i[] = array( 10, 'Very little text (' . $m['words'] . ' words) for an answer engine to quote' ); }
+				foreach ( $a['issues'] as $x ) { if ( preg_match( '/noindex|HTTP|H1 count|<title>|meta description/i', $x[1] ) ) { $i[] = $x; } }
+				if ( ! $m['canonical'] ) { $i[] = array( 4, 'No canonical link tag' ); }
+				break;
 			case 'marketing':
 				if ( ! $m['cta'] ) { $i[] = array( 15, 'No clear call-to-action button found' ); }
 				if ( ! $m['tel'] && ! $m['mail'] && ! $m['form'] ) { $i[] = array( 15, 'No easy way to contact you (phone, WhatsApp, email or form)' ); }
@@ -201,6 +232,29 @@ class RAHM_Audit {
 				break;
 			default:
 				$i = $a['issues'];
+		}
+		return $i;
+	}
+
+	/** Problems that affect the whole site, not one page. */
+	private static function site_issues( $role ) {
+		$i = array();
+		if ( ! (int) get_option( 'blog_public' ) ) { $i[] = array( 25, 'WordPress is set to discourage search engines (Settings > Reading). Turn this off before launch.' ); }
+		$ua  = array( 'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 RahmMCP', 'timeout' => 8 );
+		$eng = RAHM_SEO::engines();
+		$map = (bool) apply_filters( 'wp_sitemaps_enabled', (bool) get_option( 'blog_public' ) ); // WordPress' own sitemap switch.
+		if ( ! $map && ! $eng['yoast'] && ! $eng['rank_math'] ) { $i[] = array( 8, 'No XML sitemap is enabled (WordPress sitemaps are off and no SEO plugin provides one)' ); }
+		$rb  = wp_remote_get( home_url( '/robots.txt' ), $ua );
+		if ( ! is_wp_error( $rb ) && (int) wp_remote_retrieve_response_code( $rb ) === 200 ) {
+			$txt = strtolower( wp_remote_retrieve_body( $rb ) );
+			if ( preg_match( '/user-agent:\s*\*\s*\n(?:[^\n]*\n)*?\s*disallow:\s*\/\s*(?:\n|$)/', $txt ) ) { $i[] = array( 25, 'robots.txt blocks the whole site for all crawlers' ); }
+			if ( $role === 'aeo' ) {
+				$blocked = array();
+				foreach ( array( 'gptbot', 'claudebot', 'perplexitybot', 'google-extended', 'ccbot' ) as $bot ) {
+					if ( preg_match( '/user-agent:\s*' . preg_quote( $bot, '/' ) . '\s*\n(?:[^\n]*\n)*?\s*disallow:\s*\/\s*(?:\n|$)/', $txt ) ) { $blocked[] = $bot; }
+				}
+				if ( $blocked ) { $i[] = array( 8, 'robots.txt blocks AI crawlers: ' . implode( ', ', $blocked ) . ' (fine if intended, but they cannot then quote you)' ); }
+			}
 		}
 		return $i;
 	}

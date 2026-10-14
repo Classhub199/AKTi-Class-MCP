@@ -1,4 +1,4 @@
-/* Rashid Ahm MCP - shared dashboard scripts: copy buttons and score buttons. */
+/* Rashid Ahm MCP - dashboard scripts: copy buttons and the connection check. */
 (function () {
   'use strict';
 
@@ -45,15 +45,20 @@
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    var sc = document.getElementById('rahm-scores');
-    if (sc) {
-      var r2 = sc.getAttribute('data-rest'), n2 = sc.getAttribute('data-nonce');
-      sc.addEventListener('click', function (e) {
-        var b = e.target.closest('[data-run]');
-        if (!b) { return; }
-        b.disabled = true; b.textContent = '...';
-        window.rahmApi(r2, n2, 'audit', 'POST', { role: b.getAttribute('data-run') }).then(function () { location.reload(); }).catch(function (x) { b.disabled = false; b.textContent = '!'; alert(x.message); });
-      });
+    var h = document.getElementById('rahm-health');
+    if (h) {
+      var out = document.getElementById('rahm-health-text');
+      var run = function () {
+        out.className = 'rahm-health'; out.textContent = h.getAttribute('data-wait');
+        fetch(h.getAttribute('data-url'), { cache: 'no-store', credentials: 'omit' }).then(function (r) {
+          if (r.ok) { out.className = 'rahm-health ok'; out.textContent = '\u2713 ' + h.getAttribute('data-ok'); return; }
+          out.className = 'rahm-health bad';
+          var m = h.getAttribute('data-' + r.status);
+          out.textContent = '\u2717 ' + (m || (h.getAttribute('data-other') + ' ' + r.status + '.'));
+        }).catch(function () { out.className = 'rahm-health bad'; out.textContent = '\u2717 ' + h.getAttribute('data-fail'); });
+      };
+      document.getElementById('rahm-health-run').addEventListener('click', run);
+      run();
     }
   });
 })();

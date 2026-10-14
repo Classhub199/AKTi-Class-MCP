@@ -1,6 +1,6 @@
 <?php
 /**
- * WordPress dashboard: Live Studio, Connect (keys), Approvals, Scores, Activity, Settings, Help.
+ * WordPress dashboard: Connect AI, Expert scores and Settings. Nothing else.
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -8,65 +8,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RAHM_Admin {
 
-	const SLUG = 'rahm-studio';
+	const SLUG = 'rahm-connect';
 
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_post_rahm_keys', array( __CLASS__, 'keys_action' ) );
 		add_action( 'admin_post_rahm_settings', array( __CLASS__, 'settings_action' ) );
-		add_action( 'admin_post_rahm_export', array( __CLASS__, 'export' ) );
+		add_action( 'admin_post_rahm_measure', array( __CLASS__, 'measure_action' ) );
+		add_action( 'admin_post_rahm_selftest', array( __CLASS__, 'selftest_action' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( RAHM_FILE ), function ( $l ) {
-			array_unshift( $l, '<a href="' . esc_url( admin_url( 'admin.php?page=' . self::SLUG ) ) . '">' . esc_html( RAHM_I18n::t( 'Open Studio' ) ) . '</a>' );
+			array_unshift( $l, '<a href="' . esc_url( admin_url( 'admin.php?page=' . self::SLUG ) ) . '">' . esc_html( RAHM_I18n::t( 'Connect AI' ) ) . '</a>' );
 			return $l;
 		} );
 	}
 
-	/* ---------- Menu ---------- */
-
 	public static function menu() {
-		add_menu_page( 'Rashid Ahm MCP', 'Rashid Ahm MCP', 'manage_options', self::SLUG, array( __CLASS__, 'page_studio' ), 'dashicons-groups', 3 );
+		add_menu_page( 'Rashid Ahm MCP', 'Rashid Ahm MCP', 'manage_options', self::SLUG, array( __CLASS__, 'page_connect' ), 'dashicons-groups', 3 );
 		$subs = array(
-			self::SLUG       => array( 'Live Studio', 'page_studio' ),
-			'rahm-connect'   => array( 'Connect AI', 'page_connect' ),
-			'rahm-scores'    => array( 'Expert scores', 'page_scores' ),
-			'rahm-activity'  => array( 'Activity', 'page_activity' ),
-			'rahm-settings'  => array( 'Settings', 'page_settings' ),
-			'rahm-help'      => array( 'Help', 'page_help' ),
+			self::SLUG      => array( 'Connect AI', 'page_connect' ),
+			'rahm-scores'   => array( 'Expert scores', 'page_scores' ),
+			'rahm-settings' => array( 'Settings', 'page_settings' ),
 		);
 		foreach ( $subs as $slug => $s ) {
-			$title = RAHM_I18n::t( $s[0] );
-			add_submenu_page( self::SLUG, 'Rashid Ahm MCP', $title, 'manage_options', $slug, array( __CLASS__, $s[1] ) );
+			add_submenu_page( self::SLUG, 'Rashid Ahm MCP', RAHM_I18n::t( $s[0] ), 'manage_options', $slug, array( __CLASS__, $s[1] ) );
 		}
 	}
 
 	public static function assets( $hook ) {
-		if ( strpos( $hook, 'rahm-' ) === false && strpos( $hook, self::SLUG ) === false ) {
+		if ( strpos( $hook, 'rahm-' ) === false ) {
 			return;
 		}
 		wp_enqueue_style( 'rahm-admin', RAHM_URL . 'assets/admin.css', array(), RAHM_VERSION );
 		wp_enqueue_script( 'rahm-admin', RAHM_URL . 'assets/admin.js', array(), RAHM_VERSION, true );
-		if ( isset( $_GET['page'] ) && $_GET['page'] === self::SLUG ) { // phpcs:ignore
-			wp_enqueue_media();
-			wp_enqueue_style( 'rahm-studio', RAHM_URL . 'assets/studio.css', array( 'rahm-admin' ), RAHM_VERSION );
-			wp_enqueue_script( 'rahm-studio', RAHM_URL . 'assets/studio.js', array( 'rahm-admin' ), RAHM_VERSION, true );
-			wp_localize_script( 'rahm-studio', 'RAHM', array(
-				'rest'    => esc_url_raw( rest_url( 'rahm/v1/studio/' ) ),
-				'nonce'   => wp_create_nonce( 'wp_rest' ),
-				'home'    => home_url( '/' ),
-				'seq'     => RAHM_Store::current_seq(),
-				'i18n'    => self::js_strings(),
-			) );
-		}
-	}
-
-	private static function js_strings() {
-		$keys = array( 'Live', 'Offline', 'Last change', 'No changes yet.', 'Edit text', 'Replace image', 'Add image', 'Add image after', 'Delete', 'Cancel', 'Are you sure you want to delete this element?', 'Select an element first.', 'Saved.', 'Choose an image', 'Use this image', 'Click any text or image in the page. Double-click text to type in place.', 'This site address differs from the admin address, so direct editing is blocked by the browser. The preview still refreshes live.', 'The preview cannot be shown.', 'Your site answered with error', 'The page may be password protected, blocked by a security rule or firewall, or the address is wrong. Open it in a new tab to see the real message.', 'Your site does not allow itself to be shown inside another page (X-Frame-Options or frame-ancestors).', 'Open in a new tab', 'just now', 'seconds ago', 'minutes ago', 'hours ago', 'Page', 'Text', 'Image' );
-		$o    = array();
-		foreach ( $keys as $k ) {
-			$o[ $k ] = RAHM_I18n::t( $k );
-		}
-		return $o;
 	}
 
 	/* ---------- Shared bits ---------- */
@@ -77,9 +51,9 @@ class RAHM_Admin {
 
 	private static function open( $title, $sub = '' ) {
 		$dir = RAHM_I18n::rtl() ? ' dir="rtl"' : '';
-		echo '<div class="wrap rahm" ' . $dir . '><div class="rahm-head"><div class="rahm-brand"><span class="rahm-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 18V6l8 7 8-7v12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h1>' . esc_html( $title ) . '</h1>' . ( $sub ? '<p>' . esc_html( $sub ) . '</p>' : '' ) . '</div></div>';
+		echo '<div class="wrap rahm"' . $dir . '><div class="rahm-head"><div class="rahm-brand"><span class="rahm-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 18V6l8 7 8-7v12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h1>' . esc_html( $title ) . '</h1>' . ( $sub ? '<p>' . esc_html( $sub ) . '</p>' : '' ) . '</div></div>';
 		echo '<nav class="rahm-nav" aria-label="Rashid Ahm MCP">';
-		$items = array( self::SLUG => 'Live Studio', 'rahm-connect' => 'Connect AI', 'rahm-scores' => 'Expert scores', 'rahm-activity' => 'Activity', 'rahm-settings' => 'Settings', 'rahm-help' => 'Help' );
+		$items = array( self::SLUG => 'Connect AI', 'rahm-scores' => 'Expert scores', 'rahm-settings' => 'Settings' );
 		$cur   = isset( $_GET['page'] ) ? sanitize_key( $_GET['page'] ) : ''; // phpcs:ignore
 		foreach ( $items as $slug => $label ) {
 			echo '<a class="' . ( $cur === $slug ? 'is-on' : '' ) . '" href="' . esc_url( admin_url( 'admin.php?page=' . $slug ) ) . '">' . esc_html( self::t( $label ) ) . '</a>';
@@ -88,7 +62,7 @@ class RAHM_Admin {
 	}
 
 	private static function close() {
-		echo '<p class="rahm-foot">' . esc_html( self::t( 'Made from scratch by Rashid Ahmad.' ) ) . ' <a href="mailto:' . esc_attr( RAHM_CONTACT ) . '">' . esc_html( RAHM_CONTACT ) . '</a></p></div>';
+		echo '<p class="rahm-foot">' . esc_html( self::t( 'Made from scratch by Rashid Ahmad.' ) ) . ' ' . esc_html( self::t( 'Need help?' ) ) . ' <a href="mailto:' . esc_attr( RAHM_CONTACT ) . '">' . esc_html( RAHM_CONTACT ) . '</a> &middot; v' . esc_html( RAHM_VERSION ) . '</p></div>';
 	}
 
 	private static function notice() {
@@ -101,42 +75,7 @@ class RAHM_Admin {
 		return esc_html( human_time_diff( $t, time() ) ) . ' ' . esc_html( self::t( 'ago' ) );
 	}
 
-	/* ---------- Live Studio ---------- */
-
-	public static function page_studio() {
-		self::open( self::t( 'Live Studio' ), self::t( 'Watch your website change live. Click anything to edit it.' ) );
-		?>
-		<div class="rst" id="rahm-studio">
-			<div class="rst-bar">
-				<label class="screen-reader-text" for="rst-page"><?php echo esc_html( self::t( 'Page' ) ); ?></label>
-				<select id="rst-page"></select>
-				<div class="rst-devices" role="group" aria-label="Device">
-					<button type="button" data-w="100%" class="is-on"><?php echo esc_html( self::t( 'Laptop' ) ); ?></button>
-					<button type="button" data-w="820px"><?php echo esc_html( self::t( 'Tablet' ) ); ?></button>
-					<button type="button" data-w="390px"><?php echo esc_html( self::t( 'Mobile' ) ); ?></button>
-				</div>
-				<label class="rst-switch"><input type="checkbox" id="rst-edit"><span><?php echo esc_html( self::t( 'Edit mode' ) ); ?></span></label>
-				<button type="button" class="button" id="rst-add" hidden><?php echo esc_html( self::t( 'Add image' ) ); ?></button>
-				<button type="button" class="button" id="rst-reload"><?php echo esc_html( self::t( 'Reload preview' ) ); ?></button>
-				<span class="rst-live" id="rst-live"><i></i><span id="rst-livetxt"><?php echo esc_html( self::t( 'Live' ) ); ?></span></span>
-			</div>
-			<div class="rst-selbar" id="rst-selbar" hidden>
-				<span id="rst-seltag"></span>
-				<button type="button" class="button" id="rst-b-text" hidden><?php echo esc_html( self::t( 'Edit text' ) ); ?></button>
-				<button type="button" class="button" id="rst-b-replace" hidden><?php echo esc_html( self::t( 'Replace image' ) ); ?></button>
-				<button type="button" class="button" id="rst-b-after"><?php echo esc_html( self::t( 'Add image after' ) ); ?></button>
-				<button type="button" class="button rst-danger" id="rst-b-del"><?php echo esc_html( self::t( 'Delete' ) ); ?></button>
-				<button type="button" class="rst-link" id="rst-b-cancel"><?php echo esc_html( self::t( 'Cancel' ) ); ?></button>
-			</div>
-			<p class="rst-last" id="rst-last" aria-live="polite"></p>
-			<div class="rst-warn" id="rst-warn" role="alert" hidden></div>
-			<div class="rst-stage"><div class="rst-frame" id="rst-frame"><iframe id="rst-iframe" title="Preview" src="about:blank"></iframe></div></div>
-		</div>
-		<?php
-		self::close();
-	}
-
-	/* ---------- Connect AI (keys) ---------- */
+	/* ---------- Connect AI ---------- */
 
 	public static function page_connect() {
 		self::open( self::t( 'Connect AI' ), self::t( 'Create a key for each AI account. Each key has a role and an expiry.' ) );
@@ -157,20 +96,24 @@ class RAHM_Admin {
 		?>
 		<div class="rahm-card">
 			<h2><?php echo esc_html( self::t( 'Generate keys' ) ); ?></h2>
+			<ol class="rahm-mini">
+				<li><?php echo esc_html( self::t( 'Tick the roles you need and press Generate keys.' ) ); ?></li>
+				<li><?php echo esc_html( self::t( 'Paste each MCP link into a different AI app or account.' ) ); ?></li>
+				<li><?php echo esc_html( self::t( 'Paste the starting command in that AI\'s chat and write your task. Say yes when it asks, and the change goes live.' ) ); ?></li>
+			</ol>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php wp_nonce_field( 'rahm_keys' ); ?>
 				<input type="hidden" name="action" value="rahm_keys"><input type="hidden" name="op" value="generate">
-				<p class="rahm-lead"><?php echo esc_html( self::t( 'Tick the roles you need. You can make several keys at once. Choose one supervisor, and workers for the jobs you want to hand out.' ) ); ?></p>
 				<div class="rahm-roles">
 					<?php foreach ( $roles as $slug => $r ) : ?>
-						<label class="rahm-role"><input type="checkbox" name="roles[]" value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, array( 'supervisor' ), true ) ); ?>><span><strong><?php echo esc_html( self::t( $r['label'] ) ); ?></strong><em><?php echo esc_html( self::t( $r['about'] ) ); ?></em></span></label>
+						<label class="rahm-role"><input type="checkbox" name="roles[]" value="<?php echo esc_attr( $slug ); ?>" <?php checked( $slug === 'supervisor' ); ?>><span><strong><?php echo esc_html( self::t( $r['label'] ) ); ?></strong><em><?php echo esc_html( self::t( $r['about'] ) ); ?></em></span></label>
 					<?php endforeach; ?>
 				</div>
 				<div class="rahm-formrow">
-					<label for="rahm-exp"><?php echo esc_html( self::t( 'Key expires after' ) ); ?></label>
-					<select name="expiry" id="rahm-exp"><?php foreach ( $exp as $k => $e ) { echo '<option value="' . esc_attr( $k ) . '"' . selected( $k, '30d', false ) . '>' . esc_html( self::t( $e['label'] ) ) . '</option>'; } ?></select>
-					<label for="rahm-name"><?php echo esc_html( self::t( 'Name (optional)' ) ); ?></label>
-					<input type="text" name="name" id="rahm-name" placeholder="<?php echo esc_attr( self::t( 'e.g. ChatGPT account 2' ) ); ?>">
+					<div><label for="rahm-exp"><?php echo esc_html( self::t( 'Key expires after' ) ); ?></label>
+					<select name="expiry" id="rahm-exp"><?php foreach ( $exp as $k => $e ) { echo '<option value="' . esc_attr( $k ) . '"' . selected( $k, '30d', false ) . '>' . esc_html( self::t( $e['label'] ) ) . '</option>'; } ?></select></div>
+					<div><label for="rahm-name"><?php echo esc_html( self::t( 'Name (optional)' ) ); ?></label>
+					<input type="text" name="name" id="rahm-name" placeholder="<?php echo esc_attr( self::t( 'e.g. ChatGPT account 2' ) ); ?>"></div>
 				</div>
 				<button type="submit" class="button button-primary button-hero"><?php echo esc_html( self::t( 'Generate keys' ) ); ?></button>
 			</form>
@@ -194,6 +137,27 @@ class RAHM_Admin {
 			}
 			?>
 		</div>
+		<div class="rahm-card" id="rahm-health"
+			data-url="<?php echo esc_url( rest_url( 'rahm/v1/health' ) ); ?>"
+			data-ok="<?php echo esc_attr( self::t( 'Your site\'s MCP address is reachable from this browser. If your AI app still shows an error, the problem is between the AI app and your host, so see the tip below.' ) ); ?>"
+			data-403="<?php echo esc_attr( self::t( 'Your site answered 403 (forbidden). A security plugin, firewall or hosting rule is blocking /wp-json/. Ask your host or security plugin to allow /wp-json/rahm/v1/ and try again.' ) ); ?>"
+			data-401="<?php echo esc_attr( self::t( 'Your site answered 401 (login required). Something in front of WordPress asks for a login before the REST address can be used. Allow /wp-json/rahm/v1/ without a login.' ) ); ?>"
+			data-404="<?php echo esc_attr( self::t( 'Your site answered 404 (not found). Open Settings > Permalinks in WordPress and press Save once, then check again.' ) ); ?>"
+			data-other="<?php echo esc_attr( self::t( 'Your site answered with the status' ) ); ?>"
+			data-fail="<?php echo esc_attr( self::t( 'The browser could not reach your site\'s REST address. Check the site address in Settings > General.' ) ); ?>"
+			data-wait="<?php echo esc_attr( self::t( 'Checking...' ) ); ?>">
+			<h2><?php echo esc_html( self::t( 'Connection check' ) ); ?></h2>
+			<p id="rahm-health-text" class="rahm-health" aria-live="polite"><?php echo esc_html( self::t( 'Checking...' ) ); ?></p>
+			<p class="rahm-meta"><?php echo esc_html( self::t( 'Tip: if your AI app shows "403", the block is usually a firewall or hosting rule that stops requests from outside. Ask your host to allow requests to this address:' ) ); ?> <code><?php echo esc_html( rest_url( 'rahm/v1/' ) ); ?></code></p>
+			<div class="rahm-row">
+				<button type="button" class="button" id="rahm-health-run"><?php echo esc_html( self::t( 'Check again' ) ); ?></button>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'rahm_selftest' ); ?>
+					<input type="hidden" name="action" value="rahm_selftest">
+					<button type="submit" class="button"><?php echo esc_html( self::t( 'Run server test' ) ); ?></button>
+				</form>
+			</div>
+		</div>
 		<?php
 		self::close();
 	}
@@ -213,9 +177,9 @@ class RAHM_Admin {
 			foreach ( array_slice( $roles, 0, 12 ) as $r ) {
 				if ( ! isset( $all[ $r ] ) ) { continue; }
 				list( $token, $rec ) = RAHM_Auth::generate( $r, count( $roles ) === 1 ? $name : '', $expiry, get_current_user_id() );
-				$out[] = array( 'label' => $rec['label'], 'roleLabel' => $all[ $r ]['label'], 'expiryLabel' => isset( $exp[ $expiry ] ) ? $exp[ $expiry ]['label'] : '', 'link' => RAHM_Auth::link( $token ), 'starter' => RAHM_Skills::starter( $r ) );
+				$out[] = array( 'label' => $rec['label'], 'roleLabel' => self::t( $all[ $r ]['label'] ), 'expiryLabel' => isset( $exp[ $expiry ] ) ? self::t( $exp[ $expiry ]['label'] ) : '', 'link' => RAHM_Auth::link( $token ), 'starter' => RAHM_Skills::starter( $r ) );
 				RAHM_Ctx::set( 'studio' );
-				RAHM_Store::log( 'key', 'keys', 'Created a ' . $all[ $r ]['label'] . ' key', array( 'post' => 0 ) );
+				RAHM_Store::log( 'key', 'keys', 'Created a ' . $all[ $r ]['label'] . ' key' );
 				RAHM_Ctx::set( 'system' );
 			}
 			if ( $out ) { set_transient( 'rahm_new_keys_' . get_current_user_id(), $out, 10 * MINUTE_IN_SECONDS ); }
@@ -227,30 +191,57 @@ class RAHM_Admin {
 			RAHM_Auth::delete( sanitize_key( $_GET['id'] ) );
 			$msg = self::t( 'Key deleted.' );
 		}
-		wp_safe_redirect( add_query_arg( array( 'page' => 'rahm-connect', 'rahm_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect( add_query_arg( array( 'page' => self::SLUG, 'rahm_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
-	/* ---------- Scores ---------- */
+	/** Calls this site's own REST address from the server and explains the answers in plain words. */
+	public static function selftest_action() {
+		if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Not allowed.' ); }
+		check_admin_referer( 'rahm_selftest' );
+		$args = array( 'timeout' => 8, 'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 RahmMCP' );
+		$h    = wp_remote_get( rest_url( 'rahm/v1/health' ), $args );
+		$m    = wp_remote_post( rest_url( 'rahm/v1/mcp/rahm_selftest00000000000000000000000000000000' ), $args + array( 'headers' => array( 'Content-Type' => 'application/json' ), 'body' => wp_json_encode( array( 'jsonrpc' => '2.0', 'id' => 1, 'method' => 'ping' ) ) ) );
+		$hc   = is_wp_error( $h ) ? 0 : (int) wp_remote_retrieve_response_code( $h );
+		$mc   = is_wp_error( $m ) ? 0 : (int) wp_remote_retrieve_response_code( $m );
+		$mb   = is_wp_error( $m ) ? '' : wp_remote_retrieve_body( $m );
+		$out  = self::t( 'Server test' ) . ': ' . self::t( 'health address' ) . ' ' . ( $hc ? $hc : self::t( 'no answer' ) ) . '; ' . self::t( 'MCP address' ) . ' ' . ( $mc ? $mc : self::t( 'no answer' ) ) . '. ';
+		if ( $hc === 200 && $mc === 401 && strpos( $mb, 'rahm_auth' ) !== false ) {
+			$out .= self::t( 'Everything the plugin controls is working (a fake key is correctly refused). If your AI app still shows 403, the block is in front of WordPress, in a firewall or hosting rule: ask your host to allow /wp-json/rahm/v1/.' );
+		} elseif ( $hc === 403 || $mc === 403 ) {
+			$out .= self::t( 'Your server itself gets 403 when calling this address. A firewall, security plugin or hosting rule is blocking /wp-json/. Ask your host to allow /wp-json/rahm/v1/.' );
+		} elseif ( ! $hc && ! $mc ) {
+			$out .= self::t( 'The server could not call its own address' ) . ( is_wp_error( $h ) ? ' (' . $h->get_error_message() . ')' : '' ) . '. ' . self::t( 'Some hosts block this; it does not stop AI apps from reaching you. Use the browser check above.' );
+		} else {
+			$out .= self::t( 'Unexpected answer. Send this line to rashid.ahm199@outlook.com.' );
+		}
+		wp_safe_redirect( add_query_arg( array( 'page' => self::SLUG, 'rahm_msg' => rawurlencode( $out ) ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/* ---------- Expert scores ---------- */
 
 	public static function page_scores() {
 		self::open( self::t( 'Expert scores' ), self::t( 'Scores out of 100, measured on your real pages, plus each expert\'s written report.' ) );
+		self::notice();
 		$a     = RAHM_Store::audits();
-		$roles = array( 'seo' => 'SEO', 'copywriter' => 'Copywriter', 'designer' => 'Designer', 'performance' => 'Speed', 'marketing' => 'Marketing', 'qa' => 'Quality check' );
-		echo '<div class="rahm-grid" id="rahm-scores" data-rest="' . esc_url( rest_url( 'rahm/v1/studio/' ) ) . '" data-nonce="' . esc_attr( wp_create_nonce( 'wp_rest' ) ) . '">';
+		$roles = array( 'seo' => 'SEO', 'aeo' => 'AEO / GEO', 'copywriter' => 'Copywriter', 'designer' => 'Designer', 'performance' => 'Speed', 'marketing' => 'Marketing', 'qa' => 'Quality check' );
+		echo '<div class="rahm-grid">';
 		foreach ( $roles as $slug => $label ) {
-			$r = isset( $a[ $slug ] ) ? $a[ $slug ] : null;
-			$s = $r ? (int) $r['score'] : null;
+			$r   = isset( $a[ $slug ] ) ? $a[ $slug ] : null;
+			$s   = $r ? (int) $r['score'] : null;
 			$cls = $s === null ? 'none' : ( $s >= 85 ? 'good' : ( $s >= 65 ? 'ok' : 'bad' ) );
-			echo '<div class="rahm-card rahm-score rahm-score-' . esc_attr( $cls ) . '" data-role="' . esc_attr( $slug ) . '"><div class="rahm-ring" style="--p:' . (int) $s . '"><span>' . ( $s === null ? '-' : (int) $s ) . '</span></div><h3>' . esc_html( self::t( $label ) ) . '</h3>';
+			echo '<div class="rahm-card rahm-score rahm-score-' . esc_attr( $cls ) . '"><div class="rahm-ring" style="--p:' . (int) $s . '"><span>' . ( $s === null ? '-' : (int) $s ) . '</span></div><h3>' . esc_html( self::t( $label ) ) . '</h3>';
 			if ( $r ) {
-				echo '<p class="rahm-meta">' . self::ago( $r['t'] ) . ' · ' . esc_html( $r['by'] ) . '</p><ul>';
+				echo '<p class="rahm-meta">' . self::ago( $r['t'] ) . ' &middot; ' . esc_html( $r['by'] ) . '</p><ul>';
 				foreach ( array_slice( (array) $r['top_fixes'], 0, 4 ) as $f ) { echo '<li>' . esc_html( $f ) . '</li>'; }
 				echo '</ul>';
 			} else {
 				echo '<p class="rahm-meta">' . esc_html( self::t( 'Not measured yet.' ) ) . '</p>';
 			}
-			echo '<button type="button" class="button" data-run="' . esc_attr( $slug ) . '">' . esc_html( self::t( 'Measure now' ) ) . '</button></div>';
+			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+			wp_nonce_field( 'rahm_measure' );
+			echo '<input type="hidden" name="action" value="rahm_measure"><input type="hidden" name="role" value="' . esc_attr( $slug ) . '"><button type="submit" class="button">' . esc_html( self::t( 'Measure now' ) ) . '</button></form></div>';
 		}
 		echo '</div>';
 		$reports = RAHM_Store::inbox_all();
@@ -265,46 +256,21 @@ class RAHM_Admin {
 		self::close();
 	}
 
-	/* ---------- Activity ---------- */
-
-	public static function page_activity() {
-		self::open( self::t( 'Activity' ), self::t( 'Everything the team and you did, newest first. The last 500 actions are kept.' ) );
-		$log = array_slice( RAHM_Store::log_all(), 0, 500 );
-		echo '<div class="rahm-card"><p><a class="button" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=rahm_export&fmt=csv' ), 'rahm_export' ) ) . '">' . esc_html( self::t( 'Export CSV' ) ) . '</a> <a class="button" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=rahm_export&fmt=json' ), 'rahm_export' ) ) . '">' . esc_html( self::t( 'Export JSON' ) ) . '</a></p>';
-		if ( ! $log ) {
-			echo '<p>' . esc_html( self::t( 'No activity yet.' ) ) . '</p>';
-		} else {
-			echo '<div class="rahm-table-wrap"><table class="rahm-table"><thead><tr><th>' . esc_html( self::t( 'When' ) ) . '</th><th>' . esc_html( self::t( 'Who' ) ) . '</th><th>' . esc_html( self::t( 'What' ) ) . '</th><th></th></tr></thead><tbody>';
-			foreach ( $log as $e ) {
-				echo '<tr class="rahm-k-' . esc_attr( $e['kind'] ) . '"><td>' . esc_html( wp_date( 'd M, H:i', $e['t'] ) ) . '</td><td>' . esc_html( $e['by'] ) . '</td><td>' . esc_html( $e['summary'] ) . '</td><td>';
-				if ( ! empty( $e['undo'] ) ) { echo '<a href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=rahm_settings&op=undo&id=' . (int) $e['undo'] ), 'rahm_settings' ) ) . '">' . esc_html( self::t( 'Undo' ) ) . '</a>'; }
-				echo '</td></tr>';
-			}
-			echo '</tbody></table></div>';
-		}
-		echo '</div>';
-		self::close();
-	}
-
-	public static function export() {
+	public static function measure_action() {
 		if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Not allowed.' ); }
-		check_admin_referer( 'rahm_export' );
-		$log = array_reverse( RAHM_Store::log_all() );
-		if ( isset( $_GET['fmt'] ) && $_GET['fmt'] === 'json' ) {
-			header( 'Content-Type: application/json; charset=utf-8' );
-			header( 'Content-Disposition: attachment; filename="rashid-ahm-mcp-activity.json"' );
-			echo wp_json_encode( $log, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
-			exit;
+		check_admin_referer( 'rahm_measure' );
+		$role = isset( $_POST['role'] ) ? sanitize_key( $_POST['role'] ) : 'qa';
+		@set_time_limit( 90 ); // phpcs:ignore
+		RAHM_Ctx::set( 'studio' );
+		try {
+			$r = RAHM_Audit::run( $role, 5 );
+			RAHM_Store::save_audit( $r['role'], $r );
+			$msg = self::t( 'Measured.' ) . ' ' . $r['score'] . '/100';
+		} catch ( Throwable $e ) {
+			$msg = $e->getMessage();
 		}
-		header( 'Content-Type: text/csv; charset=utf-8' );
-		header( 'Content-Disposition: attachment; filename="rashid-ahm-mcp-activity.csv"' );
-		$o = fopen( 'php://output', 'w' );
-		fputcsv( $o, array( 'time', 'who', 'role', 'tool', 'kind', 'summary' ) );
-		foreach ( $log as $e ) {
-			$s = (string) $e['summary'];
-			if ( preg_match( '/^[=+\-@]/', $s ) ) { $s = "'" . $s; }
-			fputcsv( $o, array( wp_date( 'Y-m-d H:i:s', $e['t'] ), $e['by'], $e['role'], $e['tool'], $e['kind'], $s ) );
-		}
+		RAHM_Ctx::set( 'system' );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'rahm-scores', 'rahm_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
@@ -317,14 +283,15 @@ class RAHM_Admin {
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="rahm-form">
 			<?php wp_nonce_field( 'rahm_settings' ); ?>
-			<input type="hidden" name="action" value="rahm_settings"><input type="hidden" name="op" value="save">
+			<input type="hidden" name="action" value="rahm_settings">
 			<div class="rahm-card">
 				<h2><?php echo esc_html( self::t( 'Language' ) ); ?></h2>
-				<p><label><input type="radio" name="lang" value="en" <?php checked( $s['lang'], 'en' ); ?>> English</label> &nbsp; <label><input type="radio" name="lang" value="ur" <?php checked( $s['lang'], 'ur' ); ?>> اردو</label></p>
+				<p><label class="rahm-inline"><input type="radio" name="lang" value="en" <?php checked( $s['lang'], 'en' ); ?>> English</label> &nbsp; <label class="rahm-inline"><input type="radio" name="lang" value="ur" <?php checked( $s['lang'], 'ur' ); ?>> اردو</label></p>
 			</div>
 			<div class="rahm-card">
-				<h2><?php echo esc_html( self::t( 'Safety switches' ) ); ?></h2>
-				<p class="rahm-lead"><?php echo esc_html( self::t( 'Every change is backed up first and can be undone for 30 days. Anything visitors can see goes live only after you say yes to the AI in the chat.' ) ); ?></p>
+				<h2><?php echo esc_html( self::t( 'Going live' ) ); ?></h2>
+				<p class="rahm-lead"><?php echo esc_html( self::t( 'Every change is backed up first and can be undone for 30 days (ask the AI: "undo the last change").' ) ); ?></p>
+				<label class="rahm-check"><input type="checkbox" name="ask" value="1" <?php checked( $s['ask'] ); ?>><span><strong><?php echo esc_html( self::t( 'Ask me in the chat before anything goes live (recommended)' ) ); ?></strong><em><?php echo esc_html( self::t( 'ON: the AI asks, you say yes, and the change goes straight to your site. OFF: the AI pushes changes to your site immediately, without asking.' ) ); ?></em></span></label>
 				<label class="rahm-check"><input type="checkbox" name="readonly" value="1" <?php checked( $s['readonly'] ); ?>><span><strong><?php echo esc_html( self::t( 'Read-only mode' ) ); ?></strong><em><?php echo esc_html( self::t( 'AI can look at the site but cannot change anything.' ) ); ?></em></span></label>
 				<label class="rahm-check"><input type="checkbox" name="files" value="1" <?php checked( $s['files'] ); ?>><span><strong><?php echo esc_html( self::t( 'Allow theme and plugin file edits' ) ); ?></strong><em><?php echo esc_html( self::t( 'CSS, JavaScript, HTML and other files, with backups.' ) ); ?></em></span></label>
 				<label class="rahm-check"><input type="checkbox" name="php" value="1" <?php checked( $s['php'] ); ?>><span><strong><?php echo esc_html( self::t( 'Allow PHP file edits' ) ); ?></strong><em><?php echo esc_html( self::t( 'PHP is checked for errors before it is written.' ) ); ?></em></span></label>
@@ -354,57 +321,23 @@ class RAHM_Admin {
 	public static function settings_action() {
 		if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Not allowed.' ); }
 		check_admin_referer( 'rahm_settings' );
-		$op  = isset( $_REQUEST['op'] ) ? sanitize_key( $_REQUEST['op'] ) : '';
-		$msg = '';
-		$to  = 'rahm-settings';
-		if ( $op === 'save' ) {
-			$in = wp_unslash( $_POST );
-			RAHM_Store::save_settings( array(
-				'lang'            => isset( $in['lang'] ) && $in['lang'] === 'ur' ? 'ur' : 'en',
-				'readonly'        => empty( $in['readonly'] ) ? 0 : 1,
-				'files'           => empty( $in['files'] ) ? 0 : 1,
-				'php'             => empty( $in['php'] ) ? 0 : 1,
-				'maintenance'     => empty( $in['maintenance'] ) ? 0 : 1,
-				'maintenance_msg' => sanitize_text_field( isset( $in['maintenance_msg'] ) ? $in['maintenance_msg'] : '' ),
-				'brand'           => sanitize_text_field( isset( $in['brand'] ) ? $in['brand'] : '' ),
-				'voice'           => sanitize_text_field( isset( $in['voice'] ) ? $in['voice'] : '' ),
-				'langs'           => sanitize_text_field( isset( $in['langs'] ) ? $in['langs'] : '' ),
-				'colors'          => sanitize_text_field( isset( $in['colors'] ) ? $in['colors'] : '' ),
-				'rules'           => sanitize_textarea_field( isset( $in['rules'] ) ? $in['rules'] : '' ),
-				'skills'          => sanitize_textarea_field( isset( $in['skills'] ) ? $in['skills'] : '' ),
-			) );
-			$msg = self::t( 'Settings saved.' );
-		} elseif ( $op === 'undo' && ! empty( $_GET['id'] ) ) {
-			$to = 'rahm-activity';
-			try {
-				$r = RAHM_Store::undo( (int) $_GET['id'] );
-				RAHM_Ctx::set( 'studio' );
-				RAHM_Store::log( 'change', 'history', 'Owner undid change #' . (int) $_GET['id'] . ' (' . $r['name'] . ')' );
-				RAHM_Ctx::set( 'system' );
-				$msg = self::t( 'Undone.' );
-			} catch ( Exception $e ) {
-				$msg = $e->getMessage();
-			}
-		}
-		wp_safe_redirect( add_query_arg( array( 'page' => $to, 'rahm_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
+		$in = wp_unslash( $_POST );
+		RAHM_Store::save_settings( array(
+			'lang'            => isset( $in['lang'] ) && $in['lang'] === 'ur' ? 'ur' : 'en',
+			'ask'             => empty( $in['ask'] ) ? 0 : 1,
+			'readonly'        => empty( $in['readonly'] ) ? 0 : 1,
+			'files'           => empty( $in['files'] ) ? 0 : 1,
+			'php'             => empty( $in['php'] ) ? 0 : 1,
+			'maintenance'     => empty( $in['maintenance'] ) ? 0 : 1,
+			'maintenance_msg' => sanitize_text_field( isset( $in['maintenance_msg'] ) ? $in['maintenance_msg'] : '' ),
+			'brand'           => sanitize_text_field( isset( $in['brand'] ) ? $in['brand'] : '' ),
+			'voice'           => sanitize_text_field( isset( $in['voice'] ) ? $in['voice'] : '' ),
+			'langs'           => sanitize_text_field( isset( $in['langs'] ) ? $in['langs'] : '' ),
+			'colors'          => sanitize_text_field( isset( $in['colors'] ) ? $in['colors'] : '' ),
+			'rules'           => sanitize_textarea_field( isset( $in['rules'] ) ? $in['rules'] : '' ),
+			'skills'          => sanitize_textarea_field( isset( $in['skills'] ) ? $in['skills'] : '' ),
+		) );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'rahm-settings', 'rahm_msg' => rawurlencode( self::t( 'Settings saved.' ) ) ), admin_url( 'admin.php' ) ) );
 		exit;
-	}
-
-	/* ---------- Help ---------- */
-
-	public static function page_help() {
-		self::open( self::t( 'Help' ), self::t( 'How to connect your AI team in five steps.' ) );
-		$steps = array(
-			array( 'Generate keys', 'Open Connect AI, tick the roles you need (for example Supervisor, Designer, SEO), choose how long the keys last, and press Generate keys.' ),
-			array( 'Paste the link into each AI', 'In Claude, ChatGPT or any MCP app, add a remote MCP server and paste the link of one key. Use a different AI account for each role. If you have only one account, make a Solo key.' ),
-			array( 'Paste the starting command', 'Copy the starting command shown under each link, paste it in that AI\'s chat and write your task at the end.' ),
-			array( 'Say yes in the chat', 'The AI tells you its plan and asks if you want it. When you say yes, the change goes live on your website right away. Drafts need no yes.' ),
-			array( 'Watch it happen', 'Open Live Studio. The preview refreshes by itself when something changes. If you do not like a change, press Undo in Activity (kept for 30 days).' ),
-		);
-		echo '<div class="rahm-card"><ol class="rahm-steps">';
-		foreach ( $steps as $s ) { echo '<li><strong>' . esc_html( self::t( $s[0] ) ) . '</strong><span>' . esc_html( self::t( $s[1] ) ) . '</span></li>'; }
-		echo '</ol></div>';
-		echo '<div class="rahm-card"><h2>' . esc_html( self::t( 'Need help?' ) ) . '</h2><p>' . esc_html( self::t( 'Rashid Ahm MCP was made from scratch by Rashid Ahmad. If you need help, write to' ) ) . ' <a href="mailto:' . esc_attr( RAHM_CONTACT ) . '">' . esc_html( RAHM_CONTACT ) . '</a>.</p><p class="rahm-meta">' . esc_html( 'Version ' . RAHM_VERSION ) . '</p></div>';
-		self::close();
 	}
 }

@@ -98,3 +98,14 @@
   .rahm-card{padding:14px}
 }
 @media (prefers-reduced-motion:reduce){.rahm *{transition:none!important;animation:none!important}}
+
+/* Connect AI extras */
+.rahm-mini{margin:0 0 14px;padding-inline-start:20px;color:var(--muted);max-width:75ch}
+.rahm-mini li{margin:3px 0}
+.rahm-inline{display:inline-flex!important;align-items:center;gap:6px;margin:0!important;font-weight:600!important}
+.rahm-health{margin:0 0 8px;padding:10px 14px;border-radius:10px;background:#F0F3F9;color:var(--text);font-weight:600}
+.rahm-health.ok{background:#E3F4EC;color:var(--ok)}
+.rahm-health.bad{background:#FBE4E2;color:var(--bad)}
+.rahm code{background:#F0F3F9;padding:2px 6px;border-radius:6px;font-size:12.5px;direction:ltr;unicode-bidi:embed}
+.rahm [hidden]{display:none!important}
+.rahm-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.rahm-row form{margin:0}
